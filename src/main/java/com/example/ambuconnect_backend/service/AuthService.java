@@ -1,7 +1,9 @@
 package com.example.ambuconnect_backend.service;
 
 import com.example.ambuconnect_backend.dto.RegisterRequest;
+import com.example.ambuconnect_backend.model.Role;
 import com.example.ambuconnect_backend.model.User;
+import com.example.ambuconnect_backend.repository.RoleRepository;
 import com.example.ambuconnect_backend.repository.UserRepository;
 import com.example.ambuconnect_backend.dto.LoginRequest;
 import com.example.ambuconnect_backend.dto.LoginResponse;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final JwtUtil jwtUtil;
 
@@ -26,12 +29,16 @@ public class AuthService {
             throw new RuntimeException("Email already registered");
         }
 
+        // Default role: USER
+        Role userRole = roleRepository.findByName("PATIENT")
+                .orElseThrow(() -> new RuntimeException("Default USER role not found. Please seed roles."));
+
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(User.Role.PATIENT) // default role
+                .role(userRole)
                 .build();
 
         userRepository.save(user);
@@ -52,7 +59,7 @@ public class AuthService {
 
     public UserResponse getCurrentUser() {
 
-        String email = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));

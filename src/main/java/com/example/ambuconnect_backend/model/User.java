@@ -26,10 +26,9 @@ public class User {
 
     private String password;
 
-    @Enumerated(EnumType.STRING)
+    // role_id FK -> roles.id
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
-    public enum Role {
-        PATIENT, DRIVER, ADMIN
-    }
 }
