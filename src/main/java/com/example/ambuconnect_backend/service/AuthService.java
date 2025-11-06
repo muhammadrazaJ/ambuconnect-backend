@@ -30,8 +30,8 @@ public class AuthService {
         }
 
         // Default role: USER
-        Role userRole = roleRepository.findByName("PATIENT")
-                .orElseThrow(() -> new RuntimeException("Default USER role not found. Please seed roles."));
+        Role userRole = roleRepository.findByName(request.getRole().toUpperCase())
+                .orElseThrow(() -> new RuntimeException("Invalid role: " + request.getRole()));
 
         User user = User.builder()
                 .name(request.getName())
