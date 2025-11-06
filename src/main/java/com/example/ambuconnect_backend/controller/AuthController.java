@@ -3,6 +3,7 @@ package com.example.ambuconnect_backend.controller;
 import com.example.ambuconnect_backend.dto.*;
 import com.example.ambuconnect_backend.service.AuthService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -26,6 +27,12 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse> logout(HttpServletRequest request) {
+        authService.logout(request);
+        return ResponseEntity.ok(new ApiResponse(true, "Logout successful"));
     }
 
     @GetMapping("/me")

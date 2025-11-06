@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import jakarta.servlet.http.HttpServletRequest;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +23,7 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final JwtUtil jwtUtil;
+    private final TokenBlacklistService tokenBlacklistService;
 
     public void register(RegisterRequest request) {
 
@@ -65,6 +67,19 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         return new UserResponse(user.getId(), user.getName(), user.getEmail());
+    }
+
+    public void logout(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+
+            // Validate token before blacklisting
+            if (jwtUtil.validateToken(token)) {
+                tokenBlacklistService.blacklistToken(token);
+            }
+        }
     }
 
 }
