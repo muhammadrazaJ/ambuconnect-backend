@@ -31,7 +31,11 @@ public class AuthService {
             throw new RuntimeException("Email already registered");
         }
 
-        // Default role: USER
+
+        if (userRepository.findByPhone(request.getPhone()).isPresent()) {
+            throw new RuntimeException("Phone number already registered");
+        }
+
         Role userRole = roleRepository.findByName(request.getRole().toUpperCase())
                 .orElseThrow(() -> new RuntimeException("Invalid role: " + request.getRole()));
 
