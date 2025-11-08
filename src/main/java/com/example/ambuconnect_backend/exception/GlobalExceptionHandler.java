@@ -21,5 +21,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleRuntime(RuntimeException ex) {
         return new ResponseEntity<>(Map.of("error", ex.getMessage()), HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatusException(
+            org.springframework.web.server.ResponseStatusException ex) {
+        return new ResponseEntity<>(
+                Map.of("error", ex.getReason() != null ? ex.getReason() : ex.getStatusCode().toString()),
+                ex.getStatusCode()
+        );
+    }
 }
 
