@@ -1,5 +1,6 @@
 package com.example.ambuconnect_backend.service;
 
+import com.example.ambuconnect_backend.dto.DriverProfileResponse;
 import com.example.ambuconnect_backend.dto.DriverRegisterRequest;
 import com.example.ambuconnect_backend.dto.DriverRegisterResponse;
 import com.example.ambuconnect_backend.model.DriverProfile;
@@ -8,6 +9,7 @@ import com.example.ambuconnect_backend.repository.DriverProfileRepository;
 import com.example.ambuconnect_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -88,6 +90,45 @@ public class DriverService {
                 .licenseNumber(savedProfile.getLicenseNumber())
                 .cnic(savedProfile.getCnic())
                 .createdAt(savedProfile.getCreatedAt())
+                .build();
+    }
+
+    public DriverProfileResponse getCurrentDriverProfile() {
+        // Get current authenticated user's email from SecurityContext
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        // Find user by email
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        // Verify user has DRIVER role
+        if (user.getRole() == null || !user.getRole().getName().equals("DRIVER")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Access denied. Driver role required."
+            );
+        }
+
+        // Find driver profile by userId
+        DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Driver profile not found"
+                ));
+
+
+        return DriverProfileResponse.builder()
+                .success(true)
+                .message("Driver profile fetched successfully")
+                .email(user.getEmail())
+                .name(user.getName())
+                .phone(user.getPhone())
+                .role(user.getRole().getName())
+                .cnic(driverProfile.getCnic())
+                .licenseNumber(driverProfile.getLicenseNumber())
                 .build();
     }
 }
