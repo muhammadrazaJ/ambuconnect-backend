@@ -48,4 +48,8 @@ public class DriverProfile {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private DriverStatus status;
 }

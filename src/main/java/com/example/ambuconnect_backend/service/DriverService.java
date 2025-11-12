@@ -1,9 +1,8 @@
 package com.example.ambuconnect_backend.service;
 
-import com.example.ambuconnect_backend.dto.DriverProfileResponse;
-import com.example.ambuconnect_backend.dto.DriverRegisterRequest;
-import com.example.ambuconnect_backend.dto.DriverRegisterResponse;
+import com.example.ambuconnect_backend.dto.*;
 import com.example.ambuconnect_backend.model.DriverProfile;
+import com.example.ambuconnect_backend.model.DriverStatus;
 import com.example.ambuconnect_backend.model.User;
 import com.example.ambuconnect_backend.repository.DriverProfileRepository;
 import com.example.ambuconnect_backend.repository.UserRepository;
@@ -130,5 +129,49 @@ public class DriverService {
                 .cnic(driverProfile.getCnic())
                 .licenseNumber(driverProfile.getLicenseNumber())
                 .build();
+    }
+
+    public ApiResponse updateDriverStatus(UpdateDriverStatusRequest request) {
+        // Get current authenticated user's email from SecurityContext
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        // Find user by email
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        // Verify user has DRIVER role
+        if (user.getRole() == null || !user.getRole().getName().equals("DRIVER")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Unauthorized user. Driver role required."
+            );
+        }
+
+        // Find driver profile by userId
+        DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Driver profile not found"
+                ));
+
+        // Validate and convert status string to enum
+        DriverStatus status;
+        try {
+            status = DriverStatus.valueOf(request.getStatus());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid status. Status must be either 'Online' or 'Offline'"
+            );
+        }
+
+        // Update status
+        driverProfile.setStatus(status);
+        driverProfileRepository.save(driverProfile);
+
+        return new ApiResponse(true, "Driver status updated successfully");
     }
 }

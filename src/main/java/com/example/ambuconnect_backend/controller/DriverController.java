@@ -1,8 +1,6 @@
 package com.example.ambuconnect_backend.controller;
 
-import com.example.ambuconnect_backend.dto.DriverProfileResponse;
-import com.example.ambuconnect_backend.dto.DriverRegisterRequest;
-import com.example.ambuconnect_backend.dto.DriverRegisterResponse;
+import com.example.ambuconnect_backend.dto.*;
 import com.example.ambuconnect_backend.service.DriverService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +29,14 @@ public class DriverController {
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DriverProfileResponse> getDriverProfile() {
         DriverProfileResponse response = driverService.getCurrentDriverProfile();
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/status")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<ApiResponse> updateDriverStatus(
+            @Valid @RequestBody UpdateDriverStatusRequest request) {
+        ApiResponse response = driverService.updateDriverStatus(request);
         return ResponseEntity.ok(response);
     }
 }
