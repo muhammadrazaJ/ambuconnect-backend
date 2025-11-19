@@ -3,6 +3,7 @@ package com.example.ambuconnect_backend.controller;
 import com.example.ambuconnect_backend.dto.AmbulanceRequest;
 import com.example.ambuconnect_backend.dto.AmbulanceResponse;
 import com.example.ambuconnect_backend.dto.AmbulanceTypeResponse;
+import com.example.ambuconnect_backend.dto.DriverAmbulanceResponse;
 import com.example.ambuconnect_backend.service.AmbulanceService;
 import com.example.ambuconnect_backend.service.AmbulanceTypeService;
 import jakarta.validation.Valid;
@@ -33,5 +34,11 @@ public class AmbulanceController {
     public ResponseEntity<AmbulanceResponse> addAmbulance(@Valid @RequestBody AmbulanceRequest request) {
         AmbulanceResponse response = ambulanceService.addAmbulance(request);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<List<DriverAmbulanceResponse>> getDriverAmbulances() {
+        return ResponseEntity.ok(ambulanceService.getDriverAmbulances());
     }
 }

@@ -2,6 +2,7 @@ package com.example.ambuconnect_backend.service;
 
 import com.example.ambuconnect_backend.dto.AmbulanceRequest;
 import com.example.ambuconnect_backend.dto.AmbulanceResponse;
+import com.example.ambuconnect_backend.dto.DriverAmbulanceResponse;
 import com.example.ambuconnect_backend.model.*;
 import com.example.ambuconnect_backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -89,5 +95,54 @@ public class AmbulanceService {
                 .ambulanceType(ambulanceType.getType())
                 .availability(false)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<DriverAmbulanceResponse> getDriverAmbulances() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        if (user.getRole() == null || !user.getRole().getName().equals("DRIVER")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Access denied. Driver role required."
+            );
+        }
+
+        DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Driver profile not found"
+                ));
+
+        List<Ambulance> ambulances = ambulanceRepository.findAllByDriverProfileId(driverProfile.getId());
+        if (ambulances.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> ambulanceIds = ambulances.stream()
+                .map(Ambulance::getId)
+                .toList();
+
+        Map<Long, Boolean> availabilityMap = ambulanceAvailabilityRepository.findByAmbulanceIdIn(ambulanceIds)
+                .stream()
+                .collect(Collectors.toMap(AmbulanceAvailability::getAmbulanceId, AmbulanceAvailability::getIsAvailable));
+
+        return ambulances.stream()
+                .map(ambulance -> DriverAmbulanceResponse.builder()
+                        .id(ambulance.getId())
+                        .vehicleNumber(ambulance.getVehicleNumber())
+                        .model(ambulance.getModel())
+                        .ambulanceType(
+                                ambulance.getAmbulanceType() != null ? ambulance.getAmbulanceType().getType() : null
+                        )
+                        .isAvailable(availabilityMap.getOrDefault(ambulance.getId(), Boolean.FALSE))
+                        .build())
+                .toList();
     }
 }
