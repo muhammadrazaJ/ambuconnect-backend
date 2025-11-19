@@ -3,6 +3,7 @@ package com.example.ambuconnect_backend.service;
 import com.example.ambuconnect_backend.dto.AmbulanceRequest;
 import com.example.ambuconnect_backend.dto.AmbulanceResponse;
 import com.example.ambuconnect_backend.dto.DriverAmbulanceResponse;
+import com.example.ambuconnect_backend.dto.UpdateAmbulanceRequest;
 import com.example.ambuconnect_backend.model.*;
 import com.example.ambuconnect_backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -144,5 +145,60 @@ public class AmbulanceService {
                         .isAvailable(availabilityMap.getOrDefault(ambulance.getId(), Boolean.FALSE))
                         .build())
                 .toList();
+    }
+
+    @Transactional
+    public AmbulanceResponse updateAmbulance(Long ambulanceId, UpdateAmbulanceRequest request) {
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        // Only DRIVER can update his own ambulance
+        if (user.getRole() == null || !user.getRole().getName().equalsIgnoreCase("DRIVER")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied. Driver role required");
+        }
+
+        DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver profile not found"));
+
+        Ambulance ambulance = ambulanceRepository.findById(ambulanceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ambulance not found"));
+
+        // Ensure the ambulance belongs to this driver
+        if (!ambulance.getDriverProfileId().equals(driverProfile.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "You are not allowed to update this ambulance.");
+        }
+
+        // Normalize vehicle number
+        String normalizedVehicleNumber = request.getVehicleNumber().trim();
+
+        // Ensure vehicle number is unique if changed
+        if (!ambulance.getVehicleNumber().equals(normalizedVehicleNumber)
+                && ambulanceRepository.existsByVehicleNumber(normalizedVehicleNumber)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Vehicle number already exists");
+        }
+
+        AmbulanceType ambulanceType = ambulanceTypeRepository.findById(request.getAmbulanceTypeId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ambulance type not found"));
+
+        // Update fields
+        ambulance.setVehicleNumber(normalizedVehicleNumber);
+        ambulance.setModel(request.getModel());
+        ambulance.setAmbulanceTypeId(request.getAmbulanceTypeId());
+
+        Ambulance updated = ambulanceRepository.save(ambulance);
+
+        return AmbulanceResponse.builder()
+                .success(true)
+                .message("Ambulance updated successfully")
+                .id(updated.getId())
+                .vehicleNumber(updated.getVehicleNumber())
+                .model(updated.getModel())
+                .ambulanceType(ambulanceType.getType())
+                .build();
     }
 }
