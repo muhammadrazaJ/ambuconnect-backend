@@ -1,9 +1,6 @@
 package com.example.ambuconnect_backend.service;
 
-import com.example.ambuconnect_backend.dto.AmbulanceRequest;
-import com.example.ambuconnect_backend.dto.AmbulanceResponse;
-import com.example.ambuconnect_backend.dto.DriverAmbulanceResponse;
-import com.example.ambuconnect_backend.dto.UpdateAmbulanceRequest;
+import com.example.ambuconnect_backend.dto.*;
 import com.example.ambuconnect_backend.model.*;
 import com.example.ambuconnect_backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -200,5 +197,42 @@ public class AmbulanceService {
                 .model(updated.getModel())
                 .ambulanceType(ambulanceType.getType())
                 .build();
+    }
+
+    @Transactional
+    public ApiResponse deleteAmbulance(Long ambulanceId) {
+        // Fetch authenticated user's email
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        // Validate user exists
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        // Ensure user has DRIVER role
+        if (user.getRole() == null || !user.getRole().getName().equalsIgnoreCase("DRIVER")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied. Driver role required.");
+        }
+
+        // Resolve driver profile
+        DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver profile not found"));
+
+        // Load ambulance
+        Ambulance ambulance = ambulanceRepository.findById(ambulanceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ambulance not found"));
+
+        // Verify ownership
+        if (!ambulance.getDriverProfileId().equals(driverProfile.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not allowed to delete this ambulance.");
+        }
+
+        // Delete related availability if exists
+        ambulanceAvailabilityRepository.findByAmbulanceId(ambulance.getId())
+                .ifPresent(ambulanceAvailabilityRepository::delete);
+
+        // Delete ambulance
+        ambulanceRepository.delete(ambulance);
+
+        return new ApiResponse(true, "Ambulance removed successfully.");
     }
 }

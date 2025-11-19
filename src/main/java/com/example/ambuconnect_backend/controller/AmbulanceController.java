@@ -49,4 +49,11 @@ public class AmbulanceController {
         return ResponseEntity.ok(response);
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<ApiResponse> deleteAmbulance(@PathVariable Long id) {
+        ApiResponse response = ambulanceService.deleteAmbulance(id);
+        return ResponseEntity.ok(response);
+    }
+
 }
