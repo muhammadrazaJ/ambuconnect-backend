@@ -235,4 +235,57 @@ public class AmbulanceService {
 
         return new ApiResponse(true, "Ambulance removed successfully.");
     }
+
+    @Transactional
+    public AmbulanceAvailabilityResponse updateAmbulanceAvailability(Long ambulanceId, UpdateAmbulanceAvailabilityRequest request) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        Ambulance ambulance = ambulanceRepository.findById(ambulanceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ambulance not found"));
+
+
+        if (user.getRole() == null || !user.getRole().getName().equalsIgnoreCase("DRIVER")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied. Driver role required.");
+        }
+
+        DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver profile not found"));
+
+        if (!ambulance.getDriverProfileId().equals(driverProfile.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not allowed to update this ambulance availability.");
+        }
+//        String roleName = user.getRole() != null ? user.getRole().getName() : null;
+//        boolean isAdmin = roleName != null && roleName.equalsIgnoreCase("ADMIN");
+//        boolean isDriver = roleName != null && roleName.equalsIgnoreCase("DRIVER");
+//
+//        if (!isAdmin) {
+//            if (!isDriver) {
+//                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+//            }
+//            DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+//                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver profile not found"));
+//
+//        }
+
+        AmbulanceAvailability availability = ambulanceAvailabilityRepository.findByAmbulanceId(ambulance.getId())
+                .orElseGet(() -> AmbulanceAvailability.builder()
+                        .ambulanceId(ambulance.getId())
+                        .build());
+
+        availability.setIsAvailable(request.getIsAvailable());
+        AmbulanceAvailability saved = ambulanceAvailabilityRepository.save(availability);
+
+        return AmbulanceAvailabilityResponse.builder()
+                .success(true)
+                .message("Ambulance availability updated")
+                .id(saved.getId())
+                .ambulanceId(saved.getAmbulanceId())
+                .isAvailable(saved.getIsAvailable())
+                .updatedAt(saved.getUpdatedAt())
+                .build();
+
+    }
 }

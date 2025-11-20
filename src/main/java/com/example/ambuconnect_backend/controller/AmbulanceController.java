@@ -56,4 +56,14 @@ public class AmbulanceController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{id}/availability")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<AmbulanceAvailabilityResponse> updateAmbulanceAvailability(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateAmbulanceAvailabilityRequest request
+    ) {
+        AmbulanceAvailabilityResponse response = ambulanceService.updateAmbulanceAvailability(id, request);
+        return ResponseEntity.ok(response);
+    }
+
 }
