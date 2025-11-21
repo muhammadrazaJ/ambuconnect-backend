@@ -1,7 +1,10 @@
 package com.example.ambuconnect_backend.service;
 
 import com.example.ambuconnect_backend.dto.PatientProfileResponse;
+import com.example.ambuconnect_backend.dto.SaveLocationRequest;
+import com.example.ambuconnect_backend.dto.SaveLocationResponse;
 import com.example.ambuconnect_backend.dto.UpdatePatientProfileRequest;
+import com.example.ambuconnect_backend.model.Location;
 import com.example.ambuconnect_backend.model.User;
 import com.example.ambuconnect_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,11 +13,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class PatientService {
 
     private final UserRepository userRepository;
+    private final com.example.ambuconnect_backend.repository.LocationRepository locationRepository;
 
     public PatientProfileResponse getPatientProfile() {
         // Get email from SecurityContext (set by JwtAuthFilter)
@@ -115,6 +121,61 @@ public class PatientService {
                 updatedUser.getEmail(),
                 updatedUser.getPhone(),
                 updatedUser.getRole().getName()
+        );
+    }
+
+    public SaveLocationResponse saveLocation(SaveLocationRequest request) {
+        // Get email from SecurityContext (set by JwtAuthFilter)
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        // Find user by email
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Patient profile not found"
+                ));
+
+        // Verify user has PATIENT role
+        if (user.getRole() == null || !user.getRole().getName().equalsIgnoreCase("PATIENT")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Access denied"
+            );
+        }
+
+        // Validate address
+        if (request.getAddress() == null || request.getAddress().trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Address cannot be empty"
+            );
+        }
+
+        // Check for existing location with same lat/long
+        Optional<Location> existingLocation = locationRepository.findByLatitudeAndLongitude(
+                request.getLatitude(),
+                request.getLongitude()
+        );
+
+        if (existingLocation.isPresent()) {
+            return new SaveLocationResponse(
+                    existingLocation.get().getId(),
+                    "Location saved successfully"
+            );
+        }
+
+        // Create new location
+        Location newLocation = Location.builder()
+                .address(request.getAddress())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .build();
+
+        Location savedLocation = locationRepository.save(newLocation);
+
+        return new SaveLocationResponse(
+                savedLocation.getId(),
+                "Location saved successfully"
         );
     }
 }
