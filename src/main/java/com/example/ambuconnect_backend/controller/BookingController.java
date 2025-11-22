@@ -32,4 +32,11 @@ public class BookingController {
         List<BookingResponse> response = bookingService.getUserBookings();
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/driver/pending")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<List<BookingResponse>> getGlobalPendingRequests() {
+        List<BookingResponse> response = bookingService.getGlobalPendingRequests();
+        return ResponseEntity.ok(response);
+    }
 }

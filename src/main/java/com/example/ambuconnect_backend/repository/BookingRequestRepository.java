@@ -10,4 +10,5 @@ import java.util.List;
 @Repository
 public interface BookingRequestRepository extends JpaRepository<BookingRequest, Long> {
     List<BookingRequest> findByUser(User user);
+    List<BookingRequest> findByStatusAndDriverProfileIsNull(String status);
 }

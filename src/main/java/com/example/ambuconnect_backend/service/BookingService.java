@@ -118,4 +118,43 @@ public class BookingService {
                 .toList();
     }
 
+
+    @Transactional(readOnly = true)
+    public List<BookingResponse> getGlobalPendingRequests() {
+
+        // 1. Authenticate User - Extract email from JWT
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        // Verify user has DRIVER role
+        if (user.getRole() == null || !user.getRole().getName().equals("DRIVER")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Unauthorized user. Driver role required."
+            );
+        }
+
+        // 2. Fetch all pending bookings not assigned to any driver
+        List<BookingRequest> pendingBookings = bookingRequestRepository
+                .findByStatusAndDriverProfileIsNull("pending");
+
+        // 3. Map to BookingResponse
+        return pendingBookings.stream()
+                .map(booking -> BookingResponse.builder()
+                        .id(booking.getId())
+                        .user_id(booking.getUser().getId())
+                        .pickup_location_id(booking.getPickupLocation().getId())
+                        .drop_location_id(booking.getDropLocation().getId())
+                        .status(booking.getStatus())
+                        .requested_at(booking.getRequestedAt())
+                        .updated_at(booking.getUpdatedAt())
+                        .build()
+                )
+                .toList();
+    }
 }
