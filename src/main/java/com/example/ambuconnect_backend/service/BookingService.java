@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class BookingService {
@@ -77,4 +79,43 @@ public class BookingService {
                 .updated_at(savedBooking.getUpdatedAt())
                 .build();
     }
+
+    @Transactional(readOnly = true)
+    public List<BookingResponse> getUserBookings() {
+
+        // 1. Extract user email
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        // Verify patient role
+        if (user.getRole() == null || !user.getRole().getName().equals("PATIENT")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Unauthorized user. Patient role required."
+            );
+        }
+
+        // 2. Fetch all user's bookings
+        List<BookingRequest> bookings = bookingRequestRepository.findByUser(user);
+
+        // 3. Map to BookingResponse (same structure as createBooking)
+        return bookings.stream()
+                .map(booking -> BookingResponse.builder()
+                        .id(booking.getId())
+                        .user_id(booking.getUser().getId())
+                        .pickup_location_id(booking.getPickupLocation().getId())
+                        .drop_location_id(booking.getDropLocation().getId())
+                        .status(booking.getStatus())
+                        .requested_at(booking.getRequestedAt())
+                        .updated_at(booking.getUpdatedAt())
+                        .build()
+                )
+                .toList();
+    }
+
 }

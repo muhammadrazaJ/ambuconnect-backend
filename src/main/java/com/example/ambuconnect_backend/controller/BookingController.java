@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/bookings")
 @RequiredArgsConstructor
@@ -21,6 +23,13 @@ public class BookingController {
     @PreAuthorize("hasRole('PATIENT')")
     public ResponseEntity<BookingResponse> createBooking(@Valid @RequestBody BookingRequestDTO request) {
         BookingResponse response = bookingService.createBooking(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('PATIENT')")
+    public ResponseEntity<List<BookingResponse>> getUserBookings() {
+        List<BookingResponse> response = bookingService.getUserBookings();
         return ResponseEntity.ok(response);
     }
 }
