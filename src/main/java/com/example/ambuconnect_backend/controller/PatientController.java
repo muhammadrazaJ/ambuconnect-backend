@@ -1,5 +1,6 @@
 package com.example.ambuconnect_backend.controller;
 
+import com.example.ambuconnect_backend.dto.BookingResponse;
 import com.example.ambuconnect_backend.dto.PatientProfileResponse;
 import com.example.ambuconnect_backend.dto.UpdatePatientProfileRequest;
 import com.example.ambuconnect_backend.service.PatientService;
@@ -30,5 +31,12 @@ public class PatientController {
             @Valid @RequestBody UpdatePatientProfileRequest request) {
         PatientProfileResponse updatedProfile = patientService.updatePatientProfile(request);
         return ResponseEntity.ok(updatedProfile);
+    }
+
+    @PutMapping("/bookings/{id}/cancel")
+    @PreAuthorize("hasRole('PATIENT')")
+    public ResponseEntity<BookingResponse> cancelBooking(@PathVariable Long id) {
+        BookingResponse response = patientService.cancelBooking(id);
+        return ResponseEntity.ok(response);
     }
 }

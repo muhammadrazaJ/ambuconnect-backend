@@ -1,18 +1,19 @@
 package com.example.ambuconnect_backend.service;
 
-import com.example.ambuconnect_backend.dto.PatientProfileResponse;
-import com.example.ambuconnect_backend.dto.SaveLocationRequest;
-import com.example.ambuconnect_backend.dto.SaveLocationResponse;
-import com.example.ambuconnect_backend.dto.UpdatePatientProfileRequest;
+import com.example.ambuconnect_backend.dto.*;
+import com.example.ambuconnect_backend.model.BookingRequest;
 import com.example.ambuconnect_backend.model.Location;
 import com.example.ambuconnect_backend.model.User;
+import com.example.ambuconnect_backend.repository.BookingRequestRepository;
 import com.example.ambuconnect_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -21,6 +22,7 @@ public class PatientService {
 
     private final UserRepository userRepository;
     private final com.example.ambuconnect_backend.repository.LocationRepository locationRepository;
+    private final BookingRequestRepository bookingRequestRepository;
 
     public PatientProfileResponse getPatientProfile() {
         // Get email from SecurityContext (set by JwtAuthFilter)
@@ -177,5 +179,64 @@ public class PatientService {
                 savedLocation.getId(),
                 "Location saved successfully"
         );
+    }
+
+    @Transactional
+    public BookingResponse cancelBooking(Long bookingId) {
+        // 1. Authenticate User - Extract email from JWT
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        // Verify user has PATIENT role
+        if (user.getRole() == null || !user.getRole().getName().equalsIgnoreCase("PATIENT")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Access denied"
+            );
+        }
+
+        // 2. Find Booking
+        BookingRequest booking = bookingRequestRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Booking not found"
+                ));
+
+        // 3. Verify Booking Ownership
+        if (!booking.getUser().getId().equals(user.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You are not authorized to cancel this booking"
+            );
+        }
+
+        // 4. Validate Booking Status - Can only cancel pending bookings
+        if (!"pending".equals(booking.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Only pending bookings can be cancelled. Current status: " + booking.getStatus()
+            );
+        }
+
+        // 5. Update Booking Status to Cancelled
+        booking.setStatus("cancelled");
+        booking.setUpdatedAt(LocalDateTime.now());
+        BookingRequest savedBooking = bookingRequestRepository.save(booking);
+
+        // 6. Build and Return BookingResponse
+        return BookingResponse.builder()
+                .id(savedBooking.getId())
+                .user_id(savedBooking.getUser().getId())
+                .pickup_location_id(savedBooking.getPickupLocation().getId())
+                .drop_location_id(savedBooking.getDropLocation().getId())
+                .status(savedBooking.getStatus())
+                .requested_at(savedBooking.getRequestedAt())
+                .updated_at(savedBooking.getUpdatedAt())
+                .build();
     }
 }
