@@ -39,4 +39,11 @@ public class DriverController {
         ApiResponse response = driverService.updateDriverStatus(request);
         return ResponseEntity.ok(response);
     }
+
+    @PutMapping("/bookings/{id}/accept")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<BookingResponse> acceptBooking(@PathVariable Long id) {
+        BookingResponse response = driverService.acceptBooking(id);
+        return ResponseEntity.ok(response);
+    }
 }
