@@ -46,4 +46,11 @@ public class DriverController {
         BookingResponse response = driverService.acceptBooking(id);
         return ResponseEntity.ok(response);
     }
+
+    @PutMapping("/bookings/{id}/reject")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<BookingResponse> rejectBooking(@PathVariable Long id) {
+        BookingResponse response = driverService.rejectBooking(id);
+        return ResponseEntity.ok(response);
+    }
 }

@@ -269,4 +269,66 @@ public class DriverService {
                 .updated_at(savedBooking.getUpdatedAt())
                 .build();
     }
+
+    @Transactional
+    public BookingResponse rejectBooking(Long bookingId) {
+        // 1. Authenticate Driver - Extract email from JWT
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        // Verify user has DRIVER role
+        if (user.getRole() == null || !user.getRole().getName().equals("DRIVER")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Unauthorized user. Driver role required."
+            );
+        }
+
+        // 2. Get Driver Profile
+        DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Driver profile not found"
+                ));
+
+        // 3. Find Booking
+        BookingRequest booking = bookingRequestRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Booking not found"
+                ));
+
+        // 4. Validate Booking Status
+        if (!"pending".equals(booking.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Booking is not pending. Current status: " + booking.getStatus()
+            );
+        }
+
+        // 5. Update Booking to Rejected
+        booking.setStatus("rejected");
+        booking.setDriverProfile(driverProfile); // Optional: Track which driver rejected it
+        booking.setUpdatedAt(LocalDateTime.now());
+        BookingRequest savedBooking = bookingRequestRepository.save(booking);
+
+        // Note: No need to update ambulance availability since we're not accepting the booking
+        // The ambulance remains available for other bookings
+
+        // 6. Build and Return BookingResponse
+        return BookingResponse.builder()
+                .id(savedBooking.getId())
+                .user_id(savedBooking.getUser().getId())
+                .pickup_location_id(savedBooking.getPickupLocation().getId())
+                .drop_location_id(savedBooking.getDropLocation().getId())
+                .status(savedBooking.getStatus())
+                .requested_at(savedBooking.getRequestedAt())
+                .updated_at(savedBooking.getUpdatedAt())
+                .build();
+    }
 }
