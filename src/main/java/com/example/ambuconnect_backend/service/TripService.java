@@ -1,5 +1,6 @@
 package com.example.ambuconnect_backend.service;
 
+import com.example.ambuconnect_backend.dto.TripEndResponse;
 import com.example.ambuconnect_backend.dto.TripStartResponse;
 import com.example.ambuconnect_backend.model.*;
 import com.example.ambuconnect_backend.repository.*;
@@ -10,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -24,6 +27,7 @@ public class TripService {
     private final DriverProfileRepository driverProfileRepository;
     private final AmbulanceRepository ambulanceRepository;
     private final AmbulanceAvailabilityRepository ambulanceAvailabilityRepository;
+    private final PaymentRepository paymentRepository;
 
     @Transactional
     public TripStartResponse startTrip(Long bookingId) {
@@ -145,6 +149,126 @@ public class TripService {
                 .driverId(driverProfile.getId())
                 .startTime(now)
                 .status("in_progress")
+                .build();
+    }
+
+    @Transactional
+    public TripEndResponse endTrip(Long tripId) {
+        // 1. Authenticate User - Extract email from JWT
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        // 2. Verify user has DRIVER role
+        if (user.getRole() == null || !user.getRole().getName().equals("DRIVER")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Unauthorized user. Driver role required."
+            );
+        }
+
+        // 3. Get DriverProfile for authenticated user
+        DriverProfile driverProfile = driverProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Driver profile not found"
+                ));
+
+        // 4. Fetch trip by ID
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Trip not found"
+                ));
+
+        // 5. Validate that trip is in "in_progress" status
+        if (!"in_progress".equals(trip.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Trip must be in 'in_progress' status to end. Current status: " + trip.getStatus()
+            );
+        }
+
+        // 6. Verify driver is assigned to this trip
+        BookingRequest bookingRequest = trip.getBookingRequest();
+        if (bookingRequest.getDriverProfile() == null ||
+                !bookingRequest.getDriverProfile().getId().equals(driverProfile.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Driver is not assigned to this trip"
+            );
+        }
+
+        // 7. Check if payment already exists for this trip
+        if (paymentRepository.findByTripId(tripId).isPresent()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Payment already exists for this trip"
+            );
+        }
+
+        // 8. Set end time = now()
+        LocalDateTime endTime = LocalDateTime.now();
+
+        // 9. Calculate fare using duration
+        // Formula: baseFare = 500 + (5 * tripDurationInMinutes)
+        Duration duration = Duration.between(trip.getStartTime(), endTime);
+        long tripDurationInMinutes = duration.toMinutes();
+        BigDecimal fare = BigDecimal.valueOf(500 + (5 * tripDurationInMinutes));
+
+        // 10. Update trip record: end_time, fare, status = completed
+        trip.setEndTime(endTime);
+        trip.setFare(fare);
+        trip.setStatus("completed");
+        Trip savedTrip = tripRepository.save(trip);
+
+        // 11. Insert into TRIP_STATUS_HISTORY (trip_id, status = completed, changed_at)
+        TripStatusHistory tripStatusHistory = TripStatusHistory.builder()
+                .trip(savedTrip)
+                .status("completed")
+                .build();
+        tripStatusHistoryRepository.save(tripStatusHistory);
+
+        // 12. Update AMBULANCE_AVAILABILITY: is_available = true
+        AmbulanceAvailability ambulanceAvailability = ambulanceAvailabilityRepository
+                .findByAmbulanceId(trip.getAmbulanceId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ambulance availability record not found"
+                ));
+        ambulanceAvailability.setIsAvailable(true);
+        ambulanceAvailabilityRepository.save(ambulanceAvailability);
+
+        // 13. Update BOOKING_REQUESTS: status = completed
+        bookingRequest.setStatus("completed");
+        bookingRequestRepository.save(bookingRequest);
+
+        // 14. Insert into PAYMENTS: amount = fare, method = cash, status = pending
+        Payment payment = Payment.builder()
+                .trip(savedTrip)
+                .amount(fare)
+                .method("cash")
+                .status("pending")
+                .paidAt(null)
+                .build();
+        Payment savedPayment = paymentRepository.save(payment);
+
+        // 15. Return TripEndResponse
+        return TripEndResponse.builder()
+                .tripId(savedTrip.getId())
+                .bookingId(bookingRequest.getId())
+                .ambulanceId(trip.getAmbulanceId())
+                .driverId(driverProfile.getId())
+                .startTime(trip.getStartTime())
+                .endTime(endTime)
+                .fare(fare)
+                .status("completed")
+                .paymentId(savedPayment.getId())
+                .paymentStatus(savedPayment.getStatus())
                 .build();
     }
 }
