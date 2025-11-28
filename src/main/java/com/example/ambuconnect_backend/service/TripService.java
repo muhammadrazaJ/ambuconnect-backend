@@ -102,12 +102,12 @@ public class TripService {
                         "Ambulance availability record not found"
                 ));
 
-        if (!ambulanceAvailability.getIsAvailable()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ambulance is not available"
-            );
-        }
+//        if (!ambulanceAvailability.getIsAvailable()) {
+//            throw new ResponseStatusException(
+//                    HttpStatus.BAD_REQUEST,
+//                    "Ambulance is not available"
+//            );
+//        }
 
         // 10. Create Trip record
         LocalDateTime now = LocalDateTime.now();
