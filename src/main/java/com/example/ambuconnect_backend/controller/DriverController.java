@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/driver")
 @RequiredArgsConstructor
@@ -52,5 +54,12 @@ public class DriverController {
     public ResponseEntity<BookingResponse> rejectBooking(@PathVariable Long id) {
         BookingResponse response = driverService.rejectBooking(id);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/trips")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<List<TripDetailsResponse>> getDriverTrips() {
+        List<TripDetailsResponse> trips = driverService.getDriverTrips();
+        return ResponseEntity.ok(trips);
     }
 }

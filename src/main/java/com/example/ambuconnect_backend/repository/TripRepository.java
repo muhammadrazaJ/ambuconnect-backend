@@ -17,4 +17,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     
     @Query("SELECT t FROM Trip t WHERE t.bookingRequest.user = :user ORDER BY t.startTime DESC")
     List<Trip> findByBookingRequestUser(@Param("user") User user);
+
+    List<Trip> findByAmbulanceIdIn(List<Long> ambulanceIds);
 }
