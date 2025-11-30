@@ -5,13 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.io.Serializable;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AmbulanceTypeResponse {
+public class AmbulanceTypeResponse implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private Integer id;
     private String type;
 }
