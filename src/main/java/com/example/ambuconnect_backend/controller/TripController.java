@@ -1,5 +1,6 @@
 package com.example.ambuconnect_backend.controller;
 
+import com.example.ambuconnect_backend.dto.TripDetailsResponse;
 import com.example.ambuconnect_backend.dto.TripEndResponse;
 import com.example.ambuconnect_backend.dto.TripStartResponse;
 import com.example.ambuconnect_backend.service.TripService;
@@ -27,6 +28,13 @@ public class TripController {
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<TripEndResponse> endTrip(@PathVariable("id") Long tripId) {
         TripEndResponse response = tripService.endTrip(tripId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('PATIENT', 'DRIVER')")
+    public ResponseEntity<TripDetailsResponse> getTripDetails(@PathVariable("id") Long tripId) {
+        TripDetailsResponse response = tripService.getTripDetails(tripId);
         return ResponseEntity.ok(response);
     }
 }

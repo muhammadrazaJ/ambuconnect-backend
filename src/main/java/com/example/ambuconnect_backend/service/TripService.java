@@ -15,6 +15,8 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.example.ambuconnect_backend.repository.AmbulanceTypeRepository;
+import com.example.ambuconnect_backend.dto.TripDetailsResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +30,7 @@ public class TripService {
     private final AmbulanceRepository ambulanceRepository;
     private final AmbulanceAvailabilityRepository ambulanceAvailabilityRepository;
     private final PaymentRepository paymentRepository;
+    private final AmbulanceTypeRepository ambulanceTypeRepository;
 
     @Transactional
     public TripStartResponse startTrip(Long bookingId) {
@@ -269,6 +272,134 @@ public class TripService {
                 .status("completed")
                 .paymentId(savedPayment.getId())
                 .paymentStatus(savedPayment.getStatus())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public TripDetailsResponse getTripDetails(Long tripId) {
+        // 1. Authenticate User - Extract email from JWT
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        User authenticatedUser = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        // 2. Fetch trip by ID
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Trip not found"
+                ));
+
+        // 3. Get booking request
+        BookingRequest bookingRequest = trip.getBookingRequest();
+        if (bookingRequest == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Booking request not found for this trip"
+            );
+        }
+
+        // 4. Verify user has access: either patient (user who made booking) OR driver
+        boolean isPatient = bookingRequest.getUser() != null && 
+                           bookingRequest.getUser().getId().equals(authenticatedUser.getId());
+        
+        boolean isDriver = false;
+        if (bookingRequest.getDriverProfile() != null) {
+            DriverProfile driverProfile = bookingRequest.getDriverProfile();
+            isDriver = driverProfile.getUserId().equals(authenticatedUser.getId());
+        }
+
+        if (!isPatient && !isDriver) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Unauthorized access. Trip does not belong to this user."
+            );
+        }
+
+        // 5. Get patient (user) info
+        User patient = bookingRequest.getUser();
+        TripDetailsResponse.UserInfo userInfo = TripDetailsResponse.UserInfo.builder()
+                .name(patient.getName())
+                .phone(patient.getPhone())
+                .build();
+
+        // 6. Get driver info
+        TripDetailsResponse.DriverInfo driverInfo = null;
+        if (bookingRequest.getDriverProfile() != null) {
+            DriverProfile driverProfile = bookingRequest.getDriverProfile();
+            User driverUser = userRepository.findById(driverProfile.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Driver user not found"
+                    ));
+
+            // Get ambulance info
+            Ambulance ambulance = ambulanceRepository.findById(trip.getAmbulanceId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Ambulance not found"
+                    ));
+
+            // Get ambulance type
+            String ambulanceTypeName = "Unknown";
+            if (ambulance.getAmbulanceType() != null) {
+                ambulanceTypeName = ambulance.getAmbulanceType().getType();
+            }
+//            else {
+//                // Fetch explicitly if lazy loading didn't work
+//                ambulanceTypeRepository.findById(ambulance.getAmbulanceTypeId())
+//                        .ifPresent(type -> ambulanceTypeName = type.getType());
+//            }
+
+            driverInfo = TripDetailsResponse.DriverInfo.builder()
+                    .driverName(driverUser.getName())
+                    .driverPhone(driverUser.getPhone())
+                    .ambulanceNumber(ambulance.getVehicleNumber())
+                    .ambulanceType(ambulanceTypeName)
+                    .build();
+        }
+
+        // 7. Get location info
+        Location pickupLocation = bookingRequest.getPickupLocation();
+        TripDetailsResponse.LocationInfo pickupLocationInfo = TripDetailsResponse.LocationInfo.builder()
+                .address(pickupLocation.getAddress())
+                .lat(pickupLocation.getLatitude())
+                .lng(pickupLocation.getLongitude())
+                .build();
+
+        Location dropLocation = bookingRequest.getDropLocation();
+        TripDetailsResponse.LocationInfo dropLocationInfo = TripDetailsResponse.LocationInfo.builder()
+                .address(dropLocation.getAddress())
+                .lat(dropLocation.getLatitude())
+                .lng(dropLocation.getLongitude())
+                .build();
+
+        // 8. Get payment info
+        TripDetailsResponse.PaymentInfo paymentInfo = null;
+        Payment payment = paymentRepository.findByTripId(tripId).orElse(null);
+        if (payment != null) {
+            paymentInfo = TripDetailsResponse.PaymentInfo.builder()
+                    .amount(payment.getAmount())
+                    .method(payment.getMethod())
+                    .status(payment.getStatus())
+                    .build();
+        }
+
+        // 9. Build and return response
+        return TripDetailsResponse.builder()
+                .tripId(trip.getId())
+                .startTime(trip.getStartTime())
+                .endTime(trip.getEndTime())
+                .fare(trip.getFare())
+                .status(trip.getStatus())
+                .pickupLocation(pickupLocationInfo)
+                .dropLocation(dropLocationInfo)
+                .user(userInfo)
+                .driver(driverInfo)
+                .payment(paymentInfo)
                 .build();
     }
 }
