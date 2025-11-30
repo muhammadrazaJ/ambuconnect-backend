@@ -1,11 +1,9 @@
 package com.example.ambuconnect_backend.service;
 
 import com.example.ambuconnect_backend.dto.*;
-import com.example.ambuconnect_backend.model.BookingRequest;
-import com.example.ambuconnect_backend.model.Location;
-import com.example.ambuconnect_backend.model.User;
-import com.example.ambuconnect_backend.repository.BookingRequestRepository;
-import com.example.ambuconnect_backend.repository.UserRepository;
+import com.example.ambuconnect_backend.dto.TripDetailsResponse;
+import com.example.ambuconnect_backend.model.*;
+import com.example.ambuconnect_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +23,10 @@ public class PatientService {
     private final UserRepository userRepository;
     private final com.example.ambuconnect_backend.repository.LocationRepository locationRepository;
     private final BookingRequestRepository bookingRequestRepository;
+    private final TripRepository tripRepository;
+    private final PaymentRepository paymentRepository;
+    private final AmbulanceRepository ambulanceRepository;
+    private final AmbulanceTypeRepository ambulanceTypeRepository;
 
     public PatientProfileResponse getPatientProfile() {
         // Get email from SecurityContext (set by JwtAuthFilter)
@@ -237,6 +241,113 @@ public class PatientService {
                 .status(savedBooking.getStatus())
                 .requested_at(savedBooking.getRequestedAt())
                 .updated_at(savedBooking.getUpdatedAt())
+                .build();
+    }
+
+    public List<TripDetailsResponse> getPatientTripHistory() {
+        // 1. Authenticate User - Extract email from JWT
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        
+        // 2. Find user by email
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, 
+                        "Patient profile not found"
+                ));
+
+        // 3. Verify user has PATIENT role
+        if (user.getRole() == null || !user.getRole().getName().equalsIgnoreCase("PATIENT")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, 
+                    "Access denied"
+            );
+        }
+
+        // 4. Find all trips for this patient
+        List<Trip> trips = tripRepository.findByBookingRequestUser(user);
+        
+        // 5. Map each trip to TripDetailsResponse
+        return trips.stream()
+                .map(this::mapToTripDetailsResponse)
+                .collect(Collectors.toList());
+    }
+
+    private TripDetailsResponse mapToTripDetailsResponse(Trip trip) {
+        BookingRequest bookingRequest = trip.getBookingRequest();
+        
+        // Get patient (user) info
+        User patient = bookingRequest.getUser();
+        TripDetailsResponse.UserInfo userInfo = TripDetailsResponse.UserInfo.builder()
+                .name(patient.getName())
+                .phone(patient.getPhone())
+                .build();
+
+        // Get driver info
+        TripDetailsResponse.DriverInfo driverInfo = null;
+        if (bookingRequest.getDriverProfile() != null) {
+            DriverProfile driverProfile = bookingRequest.getDriverProfile();
+            User driverUser = userRepository.findById(driverProfile.getUserId())
+                    .orElse(null);
+
+            if (driverUser != null) {
+                // Get ambulance info
+                Ambulance ambulance = ambulanceRepository.findById(trip.getAmbulanceId())
+                        .orElse(null);
+
+                String ambulanceTypeName = "Unknown";
+                if (ambulance != null && ambulance.getAmbulanceType() != null) {
+                    ambulanceTypeName = ambulance.getAmbulanceType().getType();
+                }
+
+                String ambulanceNumber = ambulance != null ? ambulance.getVehicleNumber() : "N/A";
+
+                driverInfo = TripDetailsResponse.DriverInfo.builder()
+                        .driverName(driverUser.getName())
+                        .driverPhone(driverUser.getPhone())
+                        .ambulanceNumber(ambulanceNumber)
+                        .ambulanceType(ambulanceTypeName)
+                        .build();
+            }
+        }
+
+        // Get location info
+        Location pickupLocation = bookingRequest.getPickupLocation();
+        TripDetailsResponse.LocationInfo pickupLocationInfo = TripDetailsResponse.LocationInfo.builder()
+                .address(pickupLocation.getAddress())
+                .lat(pickupLocation.getLatitude())
+                .lng(pickupLocation.getLongitude())
+                .build();
+
+        Location dropLocation = bookingRequest.getDropLocation();
+        TripDetailsResponse.LocationInfo dropLocationInfo = TripDetailsResponse.LocationInfo.builder()
+                .address(dropLocation.getAddress())
+                .lat(dropLocation.getLatitude())
+                .lng(dropLocation.getLongitude())
+                .build();
+
+        // Get payment info
+        TripDetailsResponse.PaymentInfo paymentInfo = null;
+        Payment payment = paymentRepository.findByTripId(trip.getId()).orElse(null);
+        if (payment != null) {
+            paymentInfo = TripDetailsResponse.PaymentInfo.builder()
+                    .amount(payment.getAmount())
+                    .method(payment.getMethod())
+                    .status(payment.getStatus())
+                    .build();
+        }
+
+        // Build and return response
+        return TripDetailsResponse.builder()
+                .tripId(trip.getId())
+                .startTime(trip.getStartTime())
+                .endTime(trip.getEndTime())
+                .fare(trip.getFare())
+                .status(trip.getStatus())
+                .pickupLocation(pickupLocationInfo)
+                .dropLocation(dropLocationInfo)
+                .user(userInfo)
+                .driver(driverInfo)
+                .payment(paymentInfo)
                 .build();
     }
 }
