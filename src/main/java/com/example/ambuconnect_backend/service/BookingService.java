@@ -110,6 +110,8 @@ public class BookingService {
                         .user_id(booking.getUser().getId())
                         .pickup_location_id(booking.getPickupLocation().getId())
                         .drop_location_id(booking.getDropLocation().getId())
+                        .pickup_location(booking.getPickupLocation().getAddress())
+                        .drop_location(booking.getDropLocation().getAddress())
                         .status(booking.getStatus())
                         .requested_at(booking.getRequestedAt())
                         .updated_at(booking.getUpdatedAt())
